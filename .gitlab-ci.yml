@@ -1,0 +1,98 @@
+stages:
+  - triggers
+
+trigger_exo01:
+  stage: triggers
+  trigger:
+    include: 01-emetteurUDPv4/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 01-emetteurUDPv4/*.c
+
+trigger_exo02:
+  stage: triggers
+  trigger:
+    include: 02-config-adresse/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 02-config-adresse/*.c
+
+trigger_exo03:
+  stage: triggers
+  trigger:
+    include: 03-recepteurUDPv4/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 03-recepteurUDPv4/*.c
+
+trigger_exo04:
+  stage: triggers
+  trigger:
+    include: 04-affichage-adresse/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 04-affichage-adresse/*.c
+
+trigger_exo05:
+  stage: triggers
+  trigger:
+    include: 05-emetteurUDPv6/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 05-emetteurUDPv6/*.c
+
+trigger_exo06:
+  stage: triggers
+  trigger:
+    include: 06-recepteurUDPv6/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 06-recepteurUDPv6/*.c
+
+trigger_exo07:
+  stage: triggers
+  trigger:
+    include: 07-emetteurTCPv4/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 07-emetteurTCPv4/*.c
+
+trigger_exo08:
+  stage: triggers
+  trigger:
+    include: 08-recepteurTCPv4/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 08-recepteurTCPv4/*.c
+
+trigger_exo09:
+  stage: triggers
+  trigger:
+    include: 09-transfert-fichierTCPv6-source/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 09-transfert-fichierTCPv6-source/*.c
+
+trigger_exo10:
+  stage: triggers
+  trigger:
+    include: 10-transfert-fichierTCPv6-dest/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 10-transfert-fichierTCPv6-dest/*.c
+
+trigger_exo11:
+  stage: triggers
+  trigger:
+    include: 11-dialogue-serveurTCP/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 11-dialogue-serveurTCP/*.c
+
+trigger_exo12:
+  stage: triggers
+  trigger:
+    include: 12-chat/.gitlab-ci.yml
+  rules:
+    - changes:
+        - 12-chat/*.c
