@@ -61,8 +61,7 @@ int main (int argc, char *argv [1])
     struct sockaddr_storage address;
     socklen_t address_len = sizeof(address);
 
-    ssize_t bytes;
-    CHECK(bytes = recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
+    CHECK(recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
         (struct sockaddr*)&address, &address_len));
     printf("%s", message);
 
