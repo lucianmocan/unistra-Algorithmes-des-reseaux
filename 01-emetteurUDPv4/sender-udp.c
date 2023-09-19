@@ -38,11 +38,18 @@ int main (int argc, char *argv [])
     int udp_socket;
     CHECK(udp_socket = socket(AF_INET, SOCK_DGRAM, 0));
 
-
-
     /* complete sockaddr struct */
 
+    struct sockaddr_storage ss;
+    struct sockaddr_in *in = (struct sockaddr_in *) &ss;
+    ss.sin_family = AF_INET;
+    ss.sin_port = PORT(port_number);
+    ss.sin_addr = IP;
+    ss.sin_zero = 0;
+
+
     /* send message to remote peer */
+
 
     /* close socket */
 
