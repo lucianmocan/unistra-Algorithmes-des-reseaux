@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <err.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -55,10 +56,14 @@ int main (int argc, char *argv [])
     CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
 
     /* wait for incoming message */
+    char message[SIZE];
+    recvfrom(udp_socket, message, SIZE, MSG_WAITALL, NULL, NULL);
     
     /* close socket */
+    CHECK(close(udp_socket));
 
     /* free memory */
+    freeaddrinfo(ai);
 
     /* print received message */
 
