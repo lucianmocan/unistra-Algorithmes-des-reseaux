@@ -1,10 +1,12 @@
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <unistd.h>
 #include <inttypes.h>
+#include <netinet/udp.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -33,6 +35,10 @@ int main (int argc, char *argv [])
     }
 
     /* create socket */
+    int udp_socket;
+    CHECK(udp_socket = socket(AF_INET, SOCK_DGRAM, 0));
+
+
 
     /* complete sockaddr struct */
 
