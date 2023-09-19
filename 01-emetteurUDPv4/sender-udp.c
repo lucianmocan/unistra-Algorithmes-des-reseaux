@@ -42,16 +42,25 @@ int main (int argc, char *argv [])
 
     struct sockaddr_storage ss;
     struct sockaddr_in *in = (struct sockaddr_in *) &ss;
-    ss.sin_family = AF_INET;
-    ss.sin_port = PORT(port_number);
-    ss.sin_addr = IP;
-    ss.sin_zero = 0;
+    in->sin_family = AF_INET;
+    in->sin_port = PORT(port_number);
+    in->sin_addr.s_addr = IP;
 
 
     /* send message to remote peer */
 
 
+    ssize_t n;
+    char* message = "message";
+    int message_length = 8;
+
+    CHECK(n = sendto(udp_socket, message, message_length, MSG_CONFIRM, (struct sockaddr*)&ss, sizeof(ss)));
+    if (n != 8) {
+        exit(EXIT_FAILURE);
+    }
+
     /* close socket */
+    CHECK(close(udp_socket));
 
     return 0;
 }
