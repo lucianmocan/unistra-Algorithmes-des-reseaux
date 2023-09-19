@@ -57,18 +57,21 @@ int main (int argc, char *argv [1])
 
     /* wait for incoming message */
     char message[SIZE];
+    bzero(message, SIZE);
     struct sockaddr_storage address;
     socklen_t address_len;
 
-
-    CHECK(recvfrom(udp_socket, message, SIZE, MSG_WAITALL, (struct sockaddr*)&address, &address_len));
+    ssize_t bytes;
+    CHECK(bytes = recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
+        (struct sockaddr*)&address, &address_len));
     printf("%s", message);
-    
+
+
     /* print sender addr and port */
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     if (getnameinfo((struct sockaddr*)&address, address_len, hbuf, sizeof(hbuf), 
         sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV)){
-            errx(1, "could not get numeric host");
+            errx(1, "could not get numeric hostname");
         };
     printf("%s %s\n", hbuf, sbuf);
 
