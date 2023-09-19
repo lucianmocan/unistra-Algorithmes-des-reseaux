@@ -49,8 +49,17 @@ int main (int argc, char *argv [])
 
     /* send message to remote peer */
 
+    ssize_t n;
+    char* message = "hello world";
+    int message_length = 12;
+
+    CHECK(n = sendto(udp_socket, message, message_length, 0, ai->ai_addr, sizeof(*(ai->ai_addr))));
+    if (n != message_length) {
+        exit(EXIT_FAILURE);
+    }
+
     /* close socket */
-    close(udp_socket);
+    CHECK(close(udp_socket));
 
     /* free memory */
     freeaddrinfo(ai);
