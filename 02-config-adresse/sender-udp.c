@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <err.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -42,7 +43,11 @@ int main (int argc, char *argv [])
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = 0;
-    if (getaddrinfo(IP, port_number_str, &hints, &ai) != 0){
+    hints.ai_flags = AI_ADDRCONFIG;
+
+    int error = getaddrinfo(IP, port_number_str, &hints, &ai);
+    if (error){
+	errx(1, "%s", gai_strerror(error));
         fprintf(stderr, "error getaddrinfo");
         exit(EXIT_FAILURE);
     };
