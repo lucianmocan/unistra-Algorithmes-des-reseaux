@@ -21,6 +21,7 @@ int main (int argc, char *argv [])
 
     /* convert and check port number */
     int port_number = atoi(argv[1]);
+    char* port_number_str = argv[1];
     if (port_number == 0){
         fprintf(stderr, "erreur atoi\n");
         exit(EXIT_FAILURE);
@@ -36,12 +37,23 @@ int main (int argc, char *argv [])
     CHECK(udp_socket = socket(AF_INET, SOCK_DGRAM, 0));
 
     /* complete sockaddr struct */
+    struct addrinfo *ai;
+    struct addrinfo hints;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = 0;
+    if (getaddrinfo(IP, port_number_str, &hints, &ai) != 0){
+        fprintf(stderr, "error getaddrinfo");
+        exit(EXIT_FAILURE);
+    };
 
     /* send message to remote peer */
 
     /* close socket */
+    close(udp_socket);
 
     /* free memory */
+    freeaddrinfo(ai);
 
     return 0;
 }
