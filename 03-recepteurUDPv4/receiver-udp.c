@@ -57,7 +57,8 @@ int main (int argc, char *argv [])
 
     /* wait for incoming message */
     char message[SIZE];
-    recvfrom(udp_socket, message, SIZE, MSG_WAITALL, NULL, NULL);
+    int n_bytes;
+    CHECK(recvfrom(udp_socket, message, SIZE, MSG_WAITALL, NULL, NULL));
     
     /* close socket */
     CHECK(close(udp_socket));
@@ -66,6 +67,7 @@ int main (int argc, char *argv [])
     freeaddrinfo(ai);
 
     /* print received message */
+    printf("%s\n", message);
 
     return 0;
 }
