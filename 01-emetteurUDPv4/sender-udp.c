@@ -45,17 +45,18 @@ int main (int argc, char *argv [])
     in->sin_family = AF_INET;
     in->sin_port = PORT(port_number);
     in->sin_addr.s_addr = IP;
+    // in->sin_zero = ;
 
 
     /* send message to remote peer */
 
 
     ssize_t n;
-    char* message = "message";
-    int message_length = 8;
+    char* message = "hello world";
+    int message_length = 12;
 
     CHECK(n = sendto(udp_socket, message, message_length, MSG_CONFIRM, (struct sockaddr*)&ss, sizeof(ss)));
-    if (n != 8) {
+    if (n != message_length) {
         exit(EXIT_FAILURE);
     }
 
