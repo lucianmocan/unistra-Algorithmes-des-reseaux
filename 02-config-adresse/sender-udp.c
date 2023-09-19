@@ -47,9 +47,7 @@ int main (int argc, char *argv [])
 
     int error = getaddrinfo(IP, port_number_str, &hints, &ai);
     if (error){
-	errx(1, "%s", gai_strerror(error));
-        fprintf(stderr, "error getaddrinfo");
-        exit(EXIT_FAILURE);
+	    errx(1, "%s", gai_strerror(error));
     };
 
     /* send message to remote peer */
