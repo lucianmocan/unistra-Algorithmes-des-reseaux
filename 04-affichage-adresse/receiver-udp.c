@@ -57,9 +57,9 @@ int main (int argc, char *argv [1])
 
     /* wait for incoming message */
     char message[SIZE];
-    bzero(message, SIZE);
+    memset(message, 0, SIZE);
     struct sockaddr_storage address;
-    socklen_t address_len;
+    socklen_t address_len = sizeof(address);
 
     ssize_t bytes;
     CHECK(bytes = recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
