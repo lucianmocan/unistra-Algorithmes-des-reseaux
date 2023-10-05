@@ -54,7 +54,7 @@ int main (int argc, char *argv [])
 
     ssize_t n;
     char* message = "hello world";
-    int message_length = 12;
+    int message_length = 11;
 
     CHECK(n = sendto(udp_socket, message, message_length, 0, ai->ai_addr, sizeof(*(ai->ai_addr))));
     if (n != message_length) {
