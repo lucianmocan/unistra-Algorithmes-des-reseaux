@@ -55,10 +55,10 @@ int main (int argc, char *argv [])
 
     /* fill in dest IP and PORT */
 
-    struct sockaddr_storage ss;
-    struct sockaddr_in6 *in6 = (struct sockaddr_in6 *) &ss;
-    in6->sin6_family = AF_INET6;
-    in6->sin6_port = htons(port_number);
+    // struct sockaddr_storage ss;
+    // struct sockaddr_in6 *in6 = (struct sockaddr_in6 *) &ss;
+    // in6->sin6_family = AF_INET6;
+    // in6->sin6_port = htons(port_number);
 
     struct addrinfo *ai;
     struct addrinfo hints;
@@ -66,21 +66,21 @@ int main (int argc, char *argv [])
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = 0;
-    hints.ai_flags = AI_ADDRCONFIG;
 
     int error = getaddrinfo(IP, str_port_number, &hints, &ai);
     if (error){
 	    errx(1, "%s", gai_strerror(error));
     };
 
-    memcpy(&in6->sin6_addr, ai->ai_addr, sizeof(*(ai->ai_addr)));
+    // memcpy(in6, ai->ai_addr, sizeof(*(ai->ai_addr)));
 
     /* send message to remote peer */
     ssize_t n;
     const char* message = "hello world";
-    int message_length = strlen(message);
+    int message_length = 11;
 
-    CHECK(n = sendto(udp_socket, message, message_length, 0, (struct sockaddr*)&ss, sizeof(ss)));
+    // CHECK(n = sendto(udp_socket, message, message_length, 0, (struct sockaddr*)&ss, sizeof(ss)));
+    CHECK(n = sendto(udp_socket, message, message_length, 0, ai->ai_addr, sizeof(*(ai->ai_addr))));
     if (n != message_length) {
         exit(EXIT_FAILURE);
     }
