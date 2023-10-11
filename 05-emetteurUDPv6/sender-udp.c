@@ -48,6 +48,8 @@ int main (int argc, char *argv [])
     };
 
     /* create socket */
+    int udp_socket;
+    CHECK(udp_socket = socket(AF_INET6, SOCK_DGRAM, 0));
 
     /* fill in dest IP and PORT */
 
