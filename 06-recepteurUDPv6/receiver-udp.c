@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <errno.h>
+#include <err.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -52,18 +53,45 @@ int main (int argc, char *argv [])
     /* create socket */
     int udp_socket;
     CHECK(udp_socket = socket(AF_INET6, SOCK_DGRAM, 0));
-    
-    /* complete struct sockaddr */
+
+    struct addrinfo *ai;
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = SOCK_DGRAM;
+
+    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    if (error){
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     /* link socket to local IP and PORT */
+    CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
 
     /* wait for incoming message */
-    
+    char message[SIZE];
+    memset(message, 0, SIZE);
+    struct sockaddr_storage address;
+    socklen_t address_len = sizeof(address);
+
+    CHECK(recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
+        (struct sockaddr*)&address, &address_len));
+    printf("%s", message);
+
+
     /* print sender addr and port */
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+    if (getnameinfo((struct sockaddr*)&address, address_len, hbuf, sizeof(hbuf), 
+        sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV)){
+            errx(1, "could not get numeric hostname");
+        };
+    printf("%s %s\n", hbuf, sbuf);
 
     /* close socket */
+    CHECK(close(udp_socket));
 
     /* free memory */
+    freeaddrinfo(ai);
 
     return 0;
 }
