@@ -53,6 +53,12 @@ int main (int argc, char *argv [])
 
     /* fill in dest IP and PORT */
 
+    struct sockaddr_storage ss;
+    struct sockaddr_in6 *in6 = (struct sockaddr_in6 *) &ss;
+    in6->sin6_family = AF_INET6;
+    in6->sin6_port = htons(port_number);
+    memcpy(in6->sin6_addr.s6_addr, IP, sizeof(IP));
+
     /* send message to remote peer */
 
     /* close socket */
