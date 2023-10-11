@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <errno.h>
+#include <err.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -46,6 +47,7 @@ int main (int argc, char *argv [])
     if(cook_port_number(argv[1], &port_number) == -1){
         usage("10000 <= port_number <= 65000");
     };
+    char* str_port_number = argv[1];
 
     /* create socket */
     int udp_socket;
@@ -57,13 +59,34 @@ int main (int argc, char *argv [])
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *) &ss;
     in6->sin6_family = AF_INET6;
     in6->sin6_port = htons(port_number);
-    memcpy(in6->sin6_addr.s6_addr, IP, sizeof(IP));
+
+    struct addrinfo *ai;
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = 0;
+    hints.ai_flags = AI_ADDRCONFIG;
+
+    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    if (error){
+	    errx(1, "%s", gai_strerror(error));
+    };
+
+    memcpy(&in6->sin6_addr, ai->ai_addr, sizeof(*(ai->ai_addr)));
 
     /* send message to remote peer */
+    ssize_t n;
+    const char* message = "hello world";
+    int message_length = strlen(message);
+
+    CHECK(n = sendto(udp_socket, message, message_length, 0, (struct sockaddr*)&ss, sizeof(ss)));
+    if (n != message_length) {
+        exit(EXIT_FAILURE);
+    }
 
     /* close socket */
-
-    /* free memory */
+    CHECK(close(udp_socket));
 
     return 0;
 }
