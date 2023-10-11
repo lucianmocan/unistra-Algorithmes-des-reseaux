@@ -6,6 +6,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <errno.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -21,7 +22,12 @@ void usage(char* message){
 long cook_port_number(char* str_port, int* int_port){
     char* endptr;
     long port = strtol(str_port, &endptr, 10); 
-    if (!(strcmp(endptr, "\0") == 0) || !(port >= 10000 && port <= 65000)){
+    if (errno){
+        perror("strtol error");
+        exit(EXIT_FAILURE);
+    }
+    if (!(strcmp(endptr, "\0") == 0) || 
+        !(port >= 10000 && port <= 65000)){
         return -1;
     }
     *int_port = port;
