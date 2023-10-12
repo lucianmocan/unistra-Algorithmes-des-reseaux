@@ -15,12 +15,11 @@
 #define IP   "::1"
 #define SIZE 100
 
-void usage(char* message){
-    fprintf(stderr, "Usage: ./sebder-udp port_number");
-    fprintf(stderr, "%s\n", message);
+void usage(){
+    fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
+    // fprintf(stderr, "%s\n", message);
     exit(EXIT_FAILURE);
 }
-
 long cook_port_number(char* str_port, int* int_port){
     char* endptr;
     long port = strtol(str_port, &endptr, 10); 
@@ -39,16 +38,17 @@ long cook_port_number(char* str_port, int* int_port){
 int main (int argc, char *argv [])
 {
     /* test arg number */
-    if (argc != 2){
-        usage("");
+    if (argc != 3){
+        usage();
     }
 
     /* convert and check port number */
     int port_number;
-    if(cook_port_number(argv[1], &port_number) == -1){
-        usage("10000 <= port_number <= 65000");
+    if(cook_port_number(argv[2], &port_number) == -1){
+        usage();
     };
-    char* str_port_number = argv[1];
+    char* str_port_number = argv[2];
+    char* ip_address = argv[1];
 
     /* create socket */
     int udp_socket;
@@ -60,10 +60,15 @@ int main (int argc, char *argv [])
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
 
-    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-	    errx(1, "%s", gai_strerror(error));
-    };
+        fprintf(stderr, "Name or service not known");
+        exit(EXIT_FAILURE);
+    }
+    
+    // if (error){
+	//     errx(1, "%s", gai_strerror(error));
+    // };
 
     /* link socket to local IP and PORT */
     CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
