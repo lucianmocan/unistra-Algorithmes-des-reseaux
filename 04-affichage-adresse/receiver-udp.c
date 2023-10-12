@@ -75,7 +75,6 @@ int main (int argc, char *argv [1])
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
         fprintf(stderr, "Name or service not known");
-        freeaddrinfo(ai);
         exit(EXIT_FAILURE);
     }
     // if (error){
@@ -91,7 +90,7 @@ int main (int argc, char *argv [1])
     struct sockaddr_storage address;
     socklen_t address_len = sizeof(address);
 
-    CHECK(recvfrom(udp_socket, message, SIZE, MSG_PEEK, 
+    CHECK(recvfrom(udp_socket, message, sizeof(message)-1, MSG_PEEK, 
         (struct sockaddr*)&address, &address_len));
     printf("%s", message);
 
