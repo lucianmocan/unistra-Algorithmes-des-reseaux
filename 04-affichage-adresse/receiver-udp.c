@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <err.h>
+#include <errno.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -14,26 +15,50 @@
 #define IP   "127.0.0.1"
 #define SIZE 100
 
+long cook_port_number(char* str_port, int* int_port){
+    char* endptr;
+    long port = strtol(str_port, &endptr, 10); 
+    if (errno){
+        perror("strtol error");
+        exit(EXIT_FAILURE);
+    }
+    if (!(strcmp(endptr, "\0") == 0) || 
+        !(port >= 10000 && port <= 65000)){
+        return -1;
+    }
+    *int_port = port;
+    return 0;
+}
+
+
+int checkIPv4address(char *ip_address){
+    struct in_addr ss;
+    int check = inet_pton(AF_INET, ip_address, &(ss.s_addr));
+    CHECK(check);
+    return check;
+}
+
 int main (int argc, char *argv [1])
 {
     /* test arg number */
-    if (argc < 2){
-        fprintf(stderr, "Usage: ./receiver-udp port_number");
-        exit(EXIT_FAILURE);
-    }
-    /* convert and check port number */
-    int port_number = atoi(argv[1]);
-    char *port_number_str = argv[1];
-    
-    if (port_number == 0){
-        fprintf(stderr, "erreur atoi\n");
+    if (argc != 3){
+        fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
         exit(EXIT_FAILURE);
     }
 
-    if (!(port_number >= 10000 && port_number <= 65000)){
-        fprintf(stderr, "Numero de port doit etre contenu dans l'intervalle [10000, 65000]\n");
+    /* convert and check port number */
+    int port_number;
+    if(cook_port_number(argv[2], &port_number) == -1){
+        fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
         exit(EXIT_FAILURE);
-    }
+    };
+    char* str_port_number = argv[2];
+
+    // if (!checkIPv4address(argv[2])){
+    //     fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
+    //     exit(EXIT_FAILURE);
+    // }
+    char* ip_address = argv[1];
 
     /* create socket */
     int udp_socket;
@@ -47,10 +72,14 @@ int main (int argc, char *argv [1])
     hints.ai_protocol = 0;
     hints.ai_flags = AI_ADDRCONFIG;
 
-    int error = getaddrinfo(IP, port_number_str, &hints, &ai);
+    int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-	    errx(1, "%s", gai_strerror(error));
-    };
+        fprintf(stderr, "Name or service not known");
+        exit(EXIT_FAILURE);
+    }
+    // if (error){
+	//     errx(1, "%s", gai_strerror(error));
+    // };
 
     /* link socket to local IP and PORT */
     CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
