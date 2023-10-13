@@ -70,16 +70,12 @@ int main (int argc, char *argv [1])
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = 0;
-    hints.ai_flags = AI_ADDRCONFIG;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-        fprintf(stderr, "Name or service not known");
-        exit(EXIT_FAILURE);
-    }
-    // if (error){
-	//     errx(1, "%s", gai_strerror(error));
-    // };
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     /* link socket to local IP and PORT */
     CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
