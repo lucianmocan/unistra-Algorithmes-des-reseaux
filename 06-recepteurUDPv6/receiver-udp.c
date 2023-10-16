@@ -17,7 +17,6 @@
 
 void usage(){
     fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
-    // fprintf(stderr, "%s\n", message);
     exit(EXIT_FAILURE);
 }
 long cook_port_number(char* str_port, int* int_port){
@@ -59,16 +58,12 @@ int main (int argc, char *argv [])
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-        fprintf(stderr, "Name or service not known");
-        exit(EXIT_FAILURE);
-    }
-    
-    // if (error){
-	//     errx(1, "%s", gai_strerror(error));
-    // };
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     /* link socket to local IP and PORT */
     CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
