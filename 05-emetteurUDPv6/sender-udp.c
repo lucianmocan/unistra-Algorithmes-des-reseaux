@@ -16,7 +16,6 @@
 
 void usage(){
     fprintf(stderr, "usage: ./sender-udp ip_addr port_number\n");
-    // fprintf(stderr, "%s\n", message);
     exit(EXIT_FAILURE);
 }
 
@@ -46,7 +45,6 @@ int main (int argc, char *argv [])
     int port_number;
     if(cook_port_number(argv[2], &port_number) == -1){
         usage();
-        // usage("10000 <= port_number <= 65000");
     };
     char* str_port_number = argv[2];
     char* ip_address = argv[1];
@@ -67,16 +65,12 @@ int main (int argc, char *argv [])
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET6;
     hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = 0;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-        fprintf(stderr, "Name or service not known");
-        exit(EXIT_FAILURE);
-    }
-    // if (error){
-	//     errx(1, "%s", gai_strerror(error));
-    // };
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     memcpy(in6, ai->ai_addr, ai->ai_addrlen);
 
