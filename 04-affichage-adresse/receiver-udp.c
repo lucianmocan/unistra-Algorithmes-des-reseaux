@@ -30,14 +30,6 @@ long cook_port_number(char* str_port, int* int_port){
     return 0;
 }
 
-
-int checkIPv4address(char *ip_address){
-    struct in_addr ss;
-    int check = inet_pton(AF_INET, ip_address, &(ss.s_addr));
-    CHECK(check);
-    return check;
-}
-
 int main (int argc, char *argv [1])
 {
     /* test arg number */
@@ -49,15 +41,10 @@ int main (int argc, char *argv [1])
     /* convert and check port number */
     int port_number;
     if(cook_port_number(argv[2], &port_number) == -1){
-        fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
+        fprintf(stderr, "usage: ./receiver-udp ip_addr [10000 <= port_number <= 65000]\n");
         exit(EXIT_FAILURE);
     };
     char* str_port_number = argv[2];
-
-    // if (!checkIPv4address(argv[2])){
-    //     fprintf(stderr, "usage: ./receiver-udp ip_addr port_number\n");
-    //     exit(EXIT_FAILURE);
-    // }
     char* ip_address = argv[1];
 
     /* create socket */
@@ -74,7 +61,7 @@ int main (int argc, char *argv [1])
 
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-	    errx(1, "%s", gai_strerror(error));
+	    errx(error, "%s", gai_strerror(error));
     };
 
     /* link socket to local IP and PORT */
