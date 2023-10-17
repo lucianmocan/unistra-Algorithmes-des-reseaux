@@ -61,7 +61,7 @@ int main (int argc, char *argv [1])
 
     int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
-	    errx(error, "%s", gai_strerror(error));
+	    errx(1, "%s", gai_strerror(error));
     };
 
     /* link socket to local IP and PORT */
