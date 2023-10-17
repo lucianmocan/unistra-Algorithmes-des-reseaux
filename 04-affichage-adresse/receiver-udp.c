@@ -77,7 +77,6 @@ int main (int argc, char *argv [1])
         (struct sockaddr*)&address, &address_len));
     printf("%s", message);
 
-
     /* print sender addr and port */
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     if (getnameinfo((struct sockaddr*)&address, address_len, hbuf, sizeof(hbuf), 

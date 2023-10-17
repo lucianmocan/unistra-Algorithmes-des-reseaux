@@ -54,7 +54,6 @@ int main (int argc, char *argv [])
     CHECK(udp_socket = socket(AF_INET6, SOCK_DGRAM, 0));
 
     /* fill in dest IP and PORT */
-
     struct sockaddr_storage ss;
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *) &ss;
     in6->sin6_family = AF_INET6;
