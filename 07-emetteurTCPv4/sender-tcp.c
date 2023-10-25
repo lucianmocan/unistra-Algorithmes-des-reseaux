@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <netdb.h>
 #include <errno.h>
+#include <err.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -14,7 +15,7 @@
 #define IP "127.0.0.1"
 
 void usage(){
-    fprintf(stderr, "usage: ./receiver-tcp ip_addr port_number");
+    fprintf(stderr, "usage: ./sender-tcp ip_addr port_number\n");
     exit(EXIT_FAILURE);
 }
 long cook_port_number(char* str_port, int* int_port){
@@ -59,7 +60,7 @@ int main (int argc, char *argv [])
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
-    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
     if (error){
 	    errx(1, "%s", gai_strerror(error));
     };
@@ -68,10 +69,18 @@ int main (int argc, char *argv [])
     CHECK(connect (tcp_socket, ai->ai_addr, ai->ai_addrlen));
 
     /* send the message */
-
+    ssize_t n;
+    const char* message = "hello world";
+    int message_length = strlen(message);
+    CHECK(n = send (tcp_socket, message, message_length, 0));
+    if (n != message_length) {
+        exit(EXIT_FAILURE);
+    }
     /* close socket */
+    CHECK(close(tcp_socket));
 
     /* free memory */
+    freeaddrinfo(ai);
 
     return 0;
 }
