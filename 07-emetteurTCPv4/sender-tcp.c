@@ -51,13 +51,21 @@ int main (int argc, char *argv [])
     int tcp_socket;
     CHECK(tcp_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
 
-    /* SO_REUSEADDR option allows re-starting the program without delay */
-    int iSetOption = 1;
-    CHECK (setsockopt (tcp_socket, SOL_SOCKET, SO_REUSEADDR, &iSetOption, sizeof iSetOption));
+    /* complete sockaddr struct */
+    struct addrinfo *ai;
+    struct addrinfo hints;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
-    /* complete struct sockaddr */
+    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    if (error){
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     /* connect to the remote peer */
+    CHECK(connect (tcp_socket, ai->ai_addr, ai->ai_addrlen));
 
     /* send the message */
 
