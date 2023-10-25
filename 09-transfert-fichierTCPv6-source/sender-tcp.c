@@ -9,6 +9,8 @@
 #include <netdb.h>
 #include <errno.h>
 #include <err.h>
+#include <stdnoreturn.h>
+#include <stdarg.h>
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
                     } while (0)
@@ -16,8 +18,23 @@
 #define IP   "::1"
 #define SIZE 100
 
+noreturn void raler (int syserr, const char* msg, ...){
+	va_list ap;
+
+	va_start (ap, msg);
+	vfprintf (stderr, msg, ap);
+	fprintf (stderr, "\n");
+	va_end (ap);
+
+	if (syserr == 1)
+		perror ("");
+
+	exit(EXIT_FAILURE);
+}
+
+
 void usage(){
-    fprintf(stderr, "./sender-udp ip_addr port_number filename\n");
+    fprintf(stderr, "usage: ./sender-tcp ip_addr port_number filename\n");
     exit(EXIT_FAILURE);
 }
 long cook_port_number(char* str_port, int* int_port){
@@ -36,7 +53,17 @@ long cook_port_number(char* str_port, int* int_port){
 }
 
 void cpy (int src, int dst)
-{
+{   
+    char buffer[BUFSIZ];
+    ssize_t n;
+	while ((n = read(src, buffer, BUFSIZ)) > 0){
+		if (!(write(dst, buffer, n) == n)){
+			raler(errno, "write");
+		};
+	}
+	if (n == -1){
+		raler(errno, "read");
+	}
     return;
 }
 
@@ -61,18 +88,36 @@ int main (int argc, char *argv [])
     CHECK(fd = open(filename, O_RDONLY, 0444));
 
     /* create socket */
+    int tcp_socket;
+    CHECK(tcp_socket = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP));
 
     /* complete struct sockaddr */
+    struct addrinfo *ai;
+    struct addrinfo hints;
+    hints.ai_family = AF_INET6;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
+
+    int error = getaddrinfo(ip_address, str_port_number, &hints, &ai);
+    if (error){
+	    errx(1, "%s", gai_strerror(error));
+    };
 
     /* connect to the remote peer */
+    CHECK(connect (tcp_socket, ai->ai_addr, ai->ai_addrlen));
 
     /* send the file content */
+    cpy(fd, tcp_socket);
 
     /* close socket */
+    CHECK(close(tcp_socket));
 
     /* close file */
+    CHECK(close(fd));
 
     /* free memory */
+    freeaddrinfo(ai);
 
     return 0;
 }
