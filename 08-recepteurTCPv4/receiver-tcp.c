@@ -93,9 +93,9 @@ int main (int argc, char *argv [])
     printf("%s %s\n", hbuf, sbuf);
 
     /* wait for incoming message */
-    char message[SIZE+1];
+    char message[SIZE];
     message[SIZE] = '\0';
-    CHECK(recv (acc_socket, message, sizeof(message)-1, MSG_PEEK));
+    CHECK(recv (acc_socket, message, SIZE, MSG_PEEK));
 
     /* close sockets */
     CHECK(close(acc_socket));
