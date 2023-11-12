@@ -92,6 +92,7 @@ int main (int argc, char *argv [])
         };
     printf("%s %s\n", hbuf, sbuf);
 
+    
     /* wait for incoming message */
     char message[SIZE];
     message[SIZE] = '\0';
