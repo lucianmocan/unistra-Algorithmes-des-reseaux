@@ -96,8 +96,9 @@ int main (int argc, char *argv [])
     /* wait for incoming message */
     ssize_t n;
     char message[SIZE+1];
-    CHECK(n = recv (acc_socket, message, SIZE, MSG_PEEK));
+    CHECK(n = recv (acc_socket, message, SIZE, 0));
     message[n] = '\0';
+    
     /* close sockets */
     CHECK(close(acc_socket));
     CHECK(close(tcp_socket));
