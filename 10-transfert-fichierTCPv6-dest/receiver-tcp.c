@@ -20,7 +20,7 @@
 #define QUEUE_LENGTH 1
 
 void usage(){
-    fprintf(stderr, "usage: ./receiver-tcp port_number\n");
+    fprintf(stderr, "usage: ./receiver-tcp ip_addr port_number\n");
     exit(EXIT_FAILURE);
 }
 long cook_port_number(char* str_port, int* int_port){
@@ -71,16 +71,17 @@ void cpy (int src, int dst)
 int main (int argc, char *argv [])
 {
     /* test arg number */
-    if (argc != 2){
+    if (argc != 3){
         usage();
     }
     
     /* convert and check port number */
     int port_number;
-    if(cook_port_number(argv[1], &port_number) == -1){
+    if(cook_port_number(argv[2], &port_number) == -1){
         usage();
     };
-    char* str_port_number = argv[1];
+    char* str_port_number = argv[2];
+    char* ip_addr = argv[1];
 
     /* create socket */
     int tcp_socket;
@@ -99,7 +100,7 @@ int main (int argc, char *argv [])
     hints.ai_protocol = IPPROTO_TCP;
     hints.ai_flags = AI_NUMERICHOST | AI_NUMERICSERV;
 
-    int error = getaddrinfo(IP, str_port_number, &hints, &ai);
+    int error = getaddrinfo(ip_addr, str_port_number, &hints, &ai);
     if (error){
 	    errx(1, "%s", gai_strerror(error));
     };
