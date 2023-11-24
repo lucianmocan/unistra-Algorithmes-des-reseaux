@@ -45,13 +45,14 @@ int make_cmd(char *string, char* server_name){
     return 0;
 }
 
-void print_message (int src)
-{   
+void cpy (int src, int dst)
+{
     char buffer[BUFSIZ];
     ssize_t n;
 	while ((n = read(src, buffer, BUFSIZ)) > 0){
-        buffer[n]='\0';
-        fprintf(stdout, "%s", buffer);
+		if (!(write(dst, buffer, n) == n)){
+			raler(errno, "write");
+		};
 	}
 	if (n == -1){
 		raler(errno, "read");
@@ -100,7 +101,7 @@ int main (int argc, char * argv[])
     }
 
     /* get the transmitted file */
-    print_message(tcp_socket);
+    cpy(tcp_socket, STDOUT_FILENO);
 
 
     /* close socket */
