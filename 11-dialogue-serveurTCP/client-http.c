@@ -33,7 +33,7 @@ noreturn void raler (int syserr, const char* msg, ...){
 }
 
 void usage(){
-    fprintf(stderr, "usage: ./client-http server_name");
+    fprintf(stderr, "usage: ./client-http server_name\n");
     exit(EXIT_FAILURE);
 }
 
@@ -45,14 +45,13 @@ int make_cmd(char *string, char* server_name){
     return 0;
 }
 
-void cpy (int src, int dst)
+void print_message (int src)
 {   
     char buffer[BUFSIZ];
     ssize_t n;
 	while ((n = read(src, buffer, BUFSIZ)) > 0){
-		if (!(write(dst, buffer, n) == n)){
-			raler(errno, "write");
-		};
+        buffer[n]='\0';
+        fprintf(stdout, "%s", buffer);
 	}
 	if (n == -1){
 		raler(errno, "read");
@@ -100,10 +99,12 @@ int main (int argc, char * argv[])
         exit(EXIT_FAILURE);
     }
 
+    /* get the transmitted file */
+    print_message(tcp_socket);
+
 
     /* close socket */
     CHECK(close(tcp_socket));
-
 
     /* free struct addrinfo list */
     freeaddrinfo(ai);
