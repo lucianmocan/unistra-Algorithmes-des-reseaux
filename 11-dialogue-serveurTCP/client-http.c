@@ -78,7 +78,8 @@ int main (int argc, char * argv[])
 
     int error = getaddrinfo(server_name, "http", &hints, &ai);
     if (error){
-	    errx(1, "%s", gai_strerror(error));
+	    fprintf(stderr, "%s\n", gai_strerror(error));
+        exit(EXIT_FAILURE);
     };
 
     /* create socket */
