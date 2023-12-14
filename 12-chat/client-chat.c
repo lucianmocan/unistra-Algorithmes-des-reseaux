@@ -141,7 +141,7 @@ int main (int argc, char *argv [])
     if (cook_port_number(argv[1], &port_number) == -1){
         usage();
     }
-    char* str_port_number = argv[1];
+    // char* str_port_number = argv[1];
 
     /* create socket */
     int udp_socket;
@@ -151,23 +151,18 @@ int main (int argc, char *argv [])
     int value = 0;
     CHECK(setsockopt(udp_socket, IPPROTO_IPV6, IPV6_V6ONLY, &value, sizeof value));
 
-    struct addrinfo *ai;
-    struct addrinfo hints;
-    hints.ai_family = PF_UNSPEC;
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_protocol = IPPROTO_UDP;
-    hints.ai_flags = AI_PASSIVE;
+    struct sockaddr_storage ss;
+    struct sockaddr *s = (struct sockaddr *)&ss;
+    struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&ss;
+    in6->sin6_addr = in6addr_any;
+    in6->sin6_port = htons(port_number);
+    in6->sin6_family = PF_INET6;
 
-    int error = getaddrinfo(NULL, str_port_number, &hints, &ai);
-    if (error){
-        fprintf(stderr, "%s\n", gai_strerror(error));
-	    exit(EXIT_FAILURE);
-    };
 
     /* check if a client is already present */
     int reuseaddr = 1;
     CHECK(setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr)));
-    CHECK(bind(udp_socket, ai->ai_addr, ai->ai_addrlen));
+    CHECK(bind(udp_socket, s, sizeof(ss)));
     
     /* prepare struct pollfd with stdin and socket for incoming data */
     struct pollfd fds[2];
@@ -179,7 +174,7 @@ int main (int argc, char *argv [])
     /* main loop */
     int functional = 1;
     while (functional){
-        CHECK(poll(fds, sizeof(fds), -1));
+        CHECK(poll(fds, 2, -1));
         if(fds[1].revents & POLLIN){
             recv_message *rm = receive_message(fds[1].fd);
             status s = deal_with_message(rm);
@@ -201,6 +196,6 @@ int main (int argc, char *argv [])
     CHECK(close(udp_socket));
 
     /* free memory */
-    freeaddrinfo(ai);
+    // freeaddrinfo(ai);
     return 0;
 }
