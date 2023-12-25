@@ -41,6 +41,14 @@ void usage(){
     exit(EXIT_FAILURE);
 }
 
+#define STRING_SIZE BUFSIZ + 1
+
+typedef enum status {
+    CONNECTED, 
+    QUIT, 
+    UNKNOWN
+} status;
+
 long cook_port_number(char* str_port, int* int_port){
     char* endptr;
     long port = strtol(str_port, &endptr, 10); 
@@ -56,6 +64,22 @@ long cook_port_number(char* str_port, int* int_port){
     return 0;
 }
 
+char* string_create(int size){
+    char* buffer;
+    CHKN(buffer = calloc(size, sizeof(char)));
+    return buffer;
+}
+
+char* string_enlarge(char* string, int size){
+    CHKN(string = realloc(string, sizeof(string) + size * sizeof(char)));
+    return string;
+}
+
+void string_delete(char* string){
+    free(string);
+}
+
+
 void send_message(
                 char *message, 
                 int fd, 
@@ -70,41 +94,79 @@ void send_message(
     }
 }
 
-typedef struct recv_message{
+typedef struct recv_msg{
     char *message;
     struct sockaddr_storage *address;
-} recv_message;
+} recv_msg;
 
-recv_message* receive_message(int udp_socket){
-    char *message; 
-    CHKN(message = calloc(BUFSIZ+1, sizeof(char)));
+recv_msg* receive_message(int udp_socket){
+    char *message = string_create(STRING_SIZE);
 
     struct sockaddr_storage *address; 
     CHKN(address = calloc(1, sizeof(struct sockaddr_storage)));
     socklen_t address_len = sizeof(*address);
     
     ssize_t n;
-    CHECK(n = recvfrom(udp_socket, message, BUFSIZ, 0, (struct sockaddr*)address, &address_len));
+    CHECK(n = recvfrom(udp_socket, message, STRING_SIZE - 1, 0, (struct sockaddr*)address, &address_len));
     message[n] = '\0';
 
-    recv_message *rm;
-    CHKN(rm = malloc(sizeof(recv_message)));
+    recv_msg *rm;
+    CHKN(rm = malloc(sizeof(recv_msg)));
     rm->address = address;
     rm->message = message;
     return rm;
 }
 
-void receive_message_free(recv_message *rm){
+char* read_user_input(int fd, char* buffer){
+	ssize_t n, buffer_size = STRING_SIZE, read_bytes = 0;
+
+	while ((n = read(fd, buffer + read_bytes, STRING_SIZE - 1)) > 0){ // don't forget to do BUFSIZ + 1 when creating the string
+        read_bytes += n;
+        if (read_bytes == buffer_size - 1){
+            buffer_size += BUFSIZ;
+            buffer = string_enlarge(buffer, buffer_size);
+        }
+	}
+	if (n == -1){
+		raler(errno, "read");
+	}
+    buffer[read_bytes] = '\0';
+    return buffer;
+}
+
+status deal_with_recv_message(recv_msg *rm){
+if (strcmp(rm->message, "/QUIT") == 0){
+        return QUIT;
+    }
+    else {
+        return UNKNOWN;
+    }
+}
+
+status deal_with_input_message(char* user_input){
+    if (strcmp(user_input, "/QUIT") == 0){
+        return QUIT;
+    }
+    return UNKNOWN;
+}
+
+status input_cmd_check(int fd, char* buffer){
+    ssize_t n;
+    CHECK(n = read(fd, buffer, 10));
+    char tmp = buffer[n];
+    buffer[n] = 0;
+    status st = deal_with_input_message(buffer);
+    if (st != QUIT) 
+        buffer[n] = tmp;
+    return st;
+}
+
+
+void receive_message_free(recv_msg *rm){
     free(rm->message);
     free(rm->address);
     free(rm);
 }
-
-typedef enum status {
-    CONNECTED, 
-    QUIT, 
-    UNKNOWN
-} status;
 
 void display_remote_info(struct sockaddr_storage* ss){
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
@@ -114,19 +176,6 @@ void display_remote_info(struct sockaddr_storage* ss){
             exit(EXIT_FAILURE);
         };
     printf("%s %s\n", hbuf, sbuf);
-}
-
-status deal_with_message(recv_message *rm){
-    if (strcmp(rm->message, "/HELO\n") == 0){
-        display_remote_info(rm->address);
-        return CONNECTED;
-    }
-    else if (strcmp(rm->message, "/QUIT\n") == 0){
-        return QUIT;
-    }
-    else {
-        return UNKNOWN;
-    }
 }
 
 
@@ -160,9 +209,19 @@ int main (int argc, char *argv [])
 
 
     /* check if a client is already present */
-    int reuseaddr = 1;
-    CHECK(setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr)));
-    CHECK(bind(udp_socket, s, sizeof(ss)));
+    // int reuseaddr = 1;
+    // CHECK(setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr)));
+    if(bind(udp_socket, s, sizeof(ss)) == -1){
+        if (errno == EADDRINUSE){
+            char init[6] = "/HELO";
+            send_message(init, udp_socket, s, sizeof(ss));
+        }
+        else {
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+
     
     /* prepare struct pollfd with stdin and socket for incoming data */
     struct pollfd fds[2];
@@ -176,8 +235,8 @@ int main (int argc, char *argv [])
     while (functional){
         CHECK(poll(fds, 2, -1));
         if(fds[1].revents & POLLIN){
-            recv_message *rm = receive_message(fds[1].fd);
-            status s = deal_with_message(rm);
+            recv_msg *rm = receive_message(fds[1].fd);
+            status s = deal_with_recv_message(rm);
             switch(s){
                 case CONNECTED:
                         break;
@@ -189,6 +248,12 @@ int main (int argc, char *argv [])
             // traitement
             // instructions
             receive_message_free(rm);
+        }
+        if (fds[0].revents & POLLIN){
+            char* buffer = string_create(STRING_SIZE);
+            status st = input_cmd_check(STDIN_FILENO, buffer);
+            if (st == QUIT) printf("%s", buffer);
+            functional = 0;
         }
     }
 
