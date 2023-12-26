@@ -42,6 +42,8 @@ void usage(){
 }
 
 #define STRING_SIZE BUFSIZ + 1
+#define START "/HELO"
+#define END "/QUIT"
 
 typedef enum status {
     CONNECTED, 
@@ -135,16 +137,17 @@ char* read_user_input(int fd, char* buffer){
 }
 
 status deal_with_recv_message(recv_msg *rm){
-if (strcmp(rm->message, "/QUIT") == 0){
+    if (strcmp(rm->message, START) == 0){
+        return CONNECTED;
+    }
+    else if (strcmp(rm->message, END) == 0){
         return QUIT;
     }
-    else {
-        return UNKNOWN;
-    }
+    return UNKNOWN;
 }
 
 status deal_with_input_message(char* user_input){
-    if (strcmp(user_input, "/QUIT") == 0){
+    if (strcmp(user_input, END) == 0){
         return QUIT;
     }
     return UNKNOWN;
@@ -190,7 +193,6 @@ int main (int argc, char *argv [])
     if (cook_port_number(argv[1], &port_number) == -1){
         usage();
     }
-    // char* str_port_number = argv[1];
 
     /* create socket */
     int udp_socket;
@@ -207,21 +209,16 @@ int main (int argc, char *argv [])
     in6->sin6_port = htons(port_number);
     in6->sin6_family = PF_INET6;
 
-
     /* check if a client is already present */
-    // int reuseaddr = 1;
-    // CHECK(setsockopt(udp_socket, SOL_SOCKET, SO_REUSEADDR, &reuseaddr, sizeof(reuseaddr)));
     if(bind(udp_socket, s, sizeof(ss)) == -1){
         if (errno == EADDRINUSE){
-            char init[6] = "/HELO";
+            char init[6] = START;
             send_message(init, udp_socket, s, sizeof(ss));
         }
         else {
             exit(EXIT_FAILURE);
         }
     }
-    
-
     
     /* prepare struct pollfd with stdin and socket for incoming data */
     struct pollfd fds[2];
@@ -234,6 +231,7 @@ int main (int argc, char *argv [])
     int functional = 1;
     while (functional){
         CHECK(poll(fds, 2, -1));
+        // wait for /HELO but also deal with /QUIT
         if(fds[1].revents & POLLIN){
             recv_msg *rm = receive_message(fds[1].fd);
             status s = deal_with_recv_message(rm);
@@ -249,11 +247,18 @@ int main (int argc, char *argv [])
             // instructions
             receive_message_free(rm);
         }
+        // user input from stdin
         if (fds[0].revents & POLLIN){
             char* buffer = string_create(STRING_SIZE);
             status st = input_cmd_check(STDIN_FILENO, buffer);
-            if (st == QUIT) printf("%s", buffer);
+            if (st == QUIT) {
+                string_delete(buffer);
+                send_message(END, fds[1].fd, s, sizeof(ss));
+            }
+            // sinon c'est du DATA
+
             functional = 0;
+            string_delete(buffer);
         }
     }
 
