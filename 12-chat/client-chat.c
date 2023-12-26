@@ -48,7 +48,7 @@ void usage(){
 typedef enum status {
     CONNECTED, 
     QUIT, 
-    UNKNOWN
+    DATA
 } status;
 
 long cook_port_number(char* str_port, int* int_port){
@@ -73,7 +73,7 @@ char* string_create(int size){
 }
 
 char* string_enlarge(char* string, int size){
-    CHKN(string = realloc(string, sizeof(string) + size * sizeof(char)));
+    CHKN(string = realloc(string, size * sizeof(char)));
     return string;
 }
 
@@ -81,13 +81,18 @@ void string_delete(char* string){
     free(string);
 }
 
+void display_remote_info(struct sockaddr_storage* ss){
+    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
+    if (getnameinfo((struct sockaddr*)ss, sizeof(*ss), hbuf, sizeof(hbuf), 
+        sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV)){
+            fprintf(stderr, "could not get numeric hostname\n");
+            exit(EXIT_FAILURE);
+        };
+    printf("%s %s\n", hbuf, sbuf);
+}
 
-void send_message(
-                char *message, 
-                int fd, 
-                struct sockaddr *dest_addr, 
-                socklen_t dest_len
-                ){
+
+void send_message(char *message, int fd, struct sockaddr *dest_addr, socklen_t dest_len){
     ssize_t n;
     int message_length = strlen(message);
     CHECK(n = sendto(fd, message, message_length, 0, dest_addr, dest_len));
@@ -137,50 +142,34 @@ char* read_user_input(int fd, char* buffer){
 }
 
 status deal_with_recv_message(recv_msg *rm){
-    if (strcmp(rm->message, START) == 0){
+    if (strncmp(rm->message, START, sizeof(START)) == 0){
+        display_remote_info(rm->address);
         return CONNECTED;
     }
-    else if (strcmp(rm->message, END) == 0){
+    else if (strncmp(rm->message, END, sizeof(END)) == 0){
         return QUIT;
     }
-    return UNKNOWN;
+    return DATA;
 }
 
 status deal_with_input_message(char* user_input){
-    if (strcmp(user_input, END) == 0){
+    if (strncmp(user_input, END, sizeof(END)) == 0){
         return QUIT;
     }
-    return UNKNOWN;
+    return DATA;
 }
 
 status input_cmd_check(int fd, char* buffer){
-    ssize_t n;
-    CHECK(n = read(fd, buffer, 10));
-    char tmp = buffer[n];
-    buffer[n] = 0;
+    buffer = read_user_input(fd, buffer);
     status st = deal_with_input_message(buffer);
-    if (st != QUIT) 
-        buffer[n] = tmp;
     return st;
 }
-
 
 void receive_message_free(recv_msg *rm){
     free(rm->message);
     free(rm->address);
     free(rm);
 }
-
-void display_remote_info(struct sockaddr_storage* ss){
-    char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-    if (getnameinfo((struct sockaddr*)ss, sizeof(*ss), hbuf, sizeof(hbuf), 
-        sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV)){
-            fprintf(stderr, "could not get numeric hostname\n");
-            exit(EXIT_FAILURE);
-        };
-    printf("%s %s\n", hbuf, sbuf);
-}
-
 
 int main (int argc, char *argv [])
 {
@@ -202,7 +191,7 @@ int main (int argc, char *argv [])
     int value = 0;
     CHECK(setsockopt(udp_socket, IPPROTO_IPV6, IPV6_V6ONLY, &value, sizeof value));
 
-    struct sockaddr_storage ss;
+    struct sockaddr_storage ss = {0};
     struct sockaddr *s = (struct sockaddr *)&ss;
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&ss;
     in6->sin6_addr = in6addr_any;
@@ -241,24 +230,28 @@ int main (int argc, char *argv [])
                 case QUIT:
                         functional = 0;
                         break;
+                case DATA:
+                        // printf("%s", rm->message);
+                        break;
                 default:{;}
             }
-            // traitement
-            // instructions
             receive_message_free(rm);
         }
         // user input from stdin
         if (fds[0].revents & POLLIN){
             char* buffer = string_create(STRING_SIZE);
-            status st = input_cmd_check(STDIN_FILENO, buffer);
+            status st = input_cmd_check(fds[0].fd, buffer);
             if (st == QUIT) {
                 string_delete(buffer);
                 send_message(END, fds[1].fd, s, sizeof(ss));
+                functional = 0;
             }
-            // sinon c'est du DATA
-
-            functional = 0;
-            string_delete(buffer);
+            // if not a /QUIT message then it's a DATA message
+            else {
+                buffer = read_user_input(fds[0].fd, buffer);
+                send_message(buffer, fds[1].fd, s, sizeof(ss));
+                string_delete(buffer);
+            }
         }
     }
 
