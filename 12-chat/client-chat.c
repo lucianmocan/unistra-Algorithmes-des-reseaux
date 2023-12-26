@@ -48,7 +48,8 @@ void usage(){
 typedef enum status {
     CONNECTED, 
     QUIT, 
-    DATA
+    DATA, 
+    IGNORE
 } status;
 
 long cook_port_number(char* str_port, int* int_port){
@@ -153,6 +154,9 @@ status deal_with_recv_message(recv_msg *rm){
 }
 
 status deal_with_input_message(char* user_input){
+    if (strncmp(user_input, START, sizeof(START)) == 0){
+        return IGNORE;
+    }
     if (strncmp(user_input, END, sizeof(END)) == 0){
         return QUIT;
     }
@@ -231,7 +235,9 @@ int main (int argc, char *argv [])
                         functional = 0;
                         break;
                 case DATA:
-                        // printf("%s", rm->message);
+                        printf("%s", rm->message);
+                        break;
+                case IGNORE:
                         break;
                 default:{;}
             }
