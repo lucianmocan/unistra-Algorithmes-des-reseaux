@@ -42,17 +42,25 @@ void usage(){
 }
 
 #define STRING_SIZE BUFSIZ + 1
-#define START "/HELO"
-#define END "/QUIT"
+#define HELLO "/HELO"
+#define QUIT "/QUIT"
+#define CMDSIZE 6
 
-typedef enum status {
+typedef enum Status {
+    UNKNOWN,
     CONNECTED, 
-    QUIT, 
-    DATA, 
-    IGNORE
-} status;
+    DISCONNECTED
+} Status;
 
-long cook_port_number(char* str_port, int* int_port){
+typedef enum Event {
+    saysHELLO, 
+    saysQUIT, 
+    saysDATA
+} Event;
+
+int connectionStatus = UNKNOWN;
+
+long cookPortNumber(char* str_port, int* int_port){
     char* endptr;
     long port = strtol(str_port, &endptr, 10); 
     if (errno){
@@ -67,22 +75,7 @@ long cook_port_number(char* str_port, int* int_port){
     return 0;
 }
 
-char* string_create(int size){
-    char* buffer;
-    CHKN(buffer = calloc(size, sizeof(char)));
-    return buffer;
-}
-
-char* string_enlarge(char* string, int size){
-    CHKN(string = realloc(string, size * sizeof(char)));
-    return string;
-}
-
-void string_delete(char* string){
-    free(string);
-}
-
-void display_remote_info(struct sockaddr_storage* ss){
+void displayRemoteInfo(struct sockaddr_storage* ss){
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     if (getnameinfo((struct sockaddr*)ss, sizeof(*ss), hbuf, sizeof(hbuf), 
         sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV)){
@@ -92,87 +85,114 @@ void display_remote_info(struct sockaddr_storage* ss){
     printf("%s %s\n", hbuf, sbuf);
 }
 
+char* string_create(int size){
+    char* buffer;
+    CHKN(buffer = calloc(size, sizeof(char)));
+    return buffer;
+}
 
-void send_message(char *message, int fd, struct sockaddr *dest_addr, socklen_t dest_len){
+void string_delete(char* string){
+    free(string);
+}
+
+void sendMessage(char *message, int fd, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
     ssize_t n;
+    socklen_t dest_len = sizeof(*ss);
     int message_length = strlen(message);
-    CHECK(n = sendto(fd, message, message_length, 0, dest_addr, dest_len));
+    CHECK(n = sendto(fd, message, message_length, 0, (struct sockaddr*)in6, dest_len));
     if (n != message_length) {
         exit(EXIT_FAILURE);
     }
 }
 
-typedef struct recv_msg{
-    char *message;
-    struct sockaddr_storage *address;
-} recv_msg;
-
-recv_msg* receive_message(int udp_socket){
-    char *message = string_create(STRING_SIZE);
-
-    struct sockaddr_storage *address; 
-    CHKN(address = calloc(1, sizeof(struct sockaddr_storage)));
-    socklen_t address_len = sizeof(*address);
-    
+char* receiveMessage(int udp_socket, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
+    char *message = string_create(BUFSIZ + 1);
+    socklen_t address_len = sizeof(*ss);
     ssize_t n;
-    CHECK(n = recvfrom(udp_socket, message, STRING_SIZE - 1, 0, (struct sockaddr*)address, &address_len));
+    CHECK(n = recvfrom(udp_socket, message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
     message[n] = '\0';
 
-    recv_msg *rm;
-    CHKN(rm = malloc(sizeof(recv_msg)));
-    rm->address = address;
-    rm->message = message;
-    return rm;
+    return message;
 }
 
-char* read_user_input(int fd, char* buffer){
-	ssize_t n, buffer_size = STRING_SIZE, read_bytes = 0;
+void destroyMessage(char* message){
+    string_delete(message);
+}
 
-	while ((n = read(fd, buffer + read_bytes, STRING_SIZE - 1)) > 0){ // don't forget to do BUFSIZ + 1 when creating the string
-        read_bytes += n;
-        if (read_bytes == buffer_size - 1){
-            buffer_size += BUFSIZ;
-            buffer = string_enlarge(buffer, buffer_size);
-        }
-	}
-	if (n == -1){
-		raler(errno, "read");
-	}
-    buffer[read_bytes] = '\0';
+char* readUserInput(int fd){
+    ssize_t n;
+    char* buffer = string_create(BUFSIZ + 1);
+    CHECK(n = read(fd, buffer, BUFSIZ));
+    buffer[n] = '\0';
     return buffer;
 }
 
-status deal_with_recv_message(recv_msg *rm){
-    if (strncmp(rm->message, START, sizeof(START)) == 0){
-        display_remote_info(rm->address);
-        return CONNECTED;
+Event getSocketMessageEvent(char* message){
+    if (strncmp(message, HELLO, sizeof(HELLO)) == 0){
+        return saysHELLO;
     }
-    else if (strncmp(rm->message, END, sizeof(END)) == 0){
-        return QUIT;
+    if (strncmp(message, QUIT, sizeof(QUIT)) == 0){
+        return saysQUIT;
     }
-    return DATA;
+    return saysDATA;
 }
 
-status deal_with_input_message(char* user_input){
-    if (strncmp(user_input, START, sizeof(START)) == 0){
-        return IGNORE;
+Event getInputMessageEvent(char* message){
+    if (strncmp(message, QUIT, sizeof(QUIT)-1) == 0){
+        if (message[sizeof(QUIT)] == '\0')
+            return saysQUIT;
     }
-    if (strncmp(user_input, END, sizeof(END)) == 0){
-        return QUIT;
-    }
-    return DATA;
+    return saysDATA;
 }
 
-status input_cmd_check(int fd, char* buffer){
-    buffer = read_user_input(fd, buffer);
-    status st = deal_with_input_message(buffer);
-    return st;
+void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
+    if(fds[1].revents & POLLIN){
+        char* message = receiveMessage(fds[1].fd, in6, ss);
+        Event e = getSocketMessageEvent(message);
+        switch(e){
+            case saysHELLO: {
+                if (connectionStatus == UNKNOWN){
+                    connectionStatus = CONNECTED;
+                    displayRemoteInfo(ss);
+                }
+                break;
+            } 
+            case saysQUIT: {
+                if (connectionStatus == CONNECTED){
+                    connectionStatus = DISCONNECTED;
+                }
+                break;
+            }
+            case saysDATA: {
+                if (connectionStatus == CONNECTED){
+                    printf("%s", message);
+                }
+                break;
+            }
+        }
+        destroyMessage(message);
+    }
 }
 
-void receive_message_free(recv_msg *rm){
-    free(rm->message);
-    free(rm->address);
-    free(rm);
+void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
+    if (fds[0].revents & POLLIN){
+        char* userInput = readUserInput(fds[0].fd);
+        Event e = getInputMessageEvent(userInput);
+        switch(e){
+            case saysHELLO:
+            case saysQUIT: {
+                connectionStatus = DISCONNECTED;
+                char cmd[CMDSIZE] = QUIT;
+                sendMessage(cmd, fds[1].fd, in6, ss);
+                break;
+            }
+            case saysDATA: {
+                sendMessage(userInput, fds[1].fd, in6, ss);
+                break;
+            }
+        }
+        destroyMessage(userInput);
+    }
 }
 
 int main (int argc, char *argv [])
@@ -183,7 +203,7 @@ int main (int argc, char *argv [])
     }
     /* convert and check port number */
     int port_number;
-    if (cook_port_number(argv[1], &port_number) == -1){
+    if (cookPortNumber(argv[1], &port_number) == -1){
         usage();
     }
 
@@ -193,25 +213,27 @@ int main (int argc, char *argv [])
 
     /* set dual stack socket */
     int value = 0;
-    CHECK(setsockopt(udp_socket, IPPROTO_IPV6, IPV6_V6ONLY, &value, sizeof value));
+    CHECK(setsockopt(udp_socket, IPPROTO_IPV6, IPV6_V6ONLY, &value, sizeof(value)));
 
     struct sockaddr_storage ss = {0};
-    struct sockaddr *s = (struct sockaddr *)&ss;
     struct sockaddr_in6 *in6 = (struct sockaddr_in6 *)&ss;
     in6->sin6_addr = in6addr_any;
     in6->sin6_port = htons(port_number);
     in6->sin6_family = PF_INET6;
 
     /* check if a client is already present */
-    if(bind(udp_socket, s, sizeof(ss)) == -1){
+    if(bind(udp_socket, (struct sockaddr*)in6, sizeof(ss)) == -1){
+        // if another client is already waiting send /HELO
         if (errno == EADDRINUSE){
-            char init[6] = START;
-            send_message(init, udp_socket, s, sizeof(ss));
+            char cmd[CMDSIZE] = HELLO;
+            sendMessage(cmd, udp_socket, in6, &ss);
+            connectionStatus = CONNECTED;
         }
         else {
             exit(EXIT_FAILURE);
         }
     }
+    // if no client is present on the port then WAIT
     
     /* prepare struct pollfd with stdin and socket for incoming data */
     struct pollfd fds[2];
@@ -221,50 +243,16 @@ int main (int argc, char *argv [])
     fds[1].events = POLLIN;
 
     /* main loop */
-    int functional = 1;
-    while (functional){
+    while (connectionStatus != DISCONNECTED){
         CHECK(poll(fds, 2, -1));
-        // wait for /HELO but also deal with /QUIT
-        if(fds[1].revents & POLLIN){
-            recv_msg *rm = receive_message(fds[1].fd);
-            status s = deal_with_recv_message(rm);
-            switch(s){
-                case CONNECTED:
-                        break;
-                case QUIT:
-                        functional = 0;
-                        break;
-                case DATA:
-                        printf("%s", rm->message);
-                        break;
-                case IGNORE:
-                        break;
-                default:{;}
-            }
-            receive_message_free(rm);
-        }
+        // wait for /HELO but also deal with /QUIT and DATA
+        actionOnSocket(fds, in6, &ss);
         // user input from stdin
-        if (fds[0].revents & POLLIN){
-            char* buffer = string_create(STRING_SIZE);
-            status st = input_cmd_check(fds[0].fd, buffer);
-            if (st == QUIT) {
-                string_delete(buffer);
-                send_message(END, fds[1].fd, s, sizeof(ss));
-                functional = 0;
-            }
-            // if not a /QUIT message then it's a DATA message
-            else {
-                buffer = read_user_input(fds[0].fd, buffer);
-                send_message(buffer, fds[1].fd, s, sizeof(ss));
-                string_delete(buffer);
-            }
-        }
+        actionOnInput(fds, in6, &ss);
     }
 
     /* close socket */
     CHECK(close(udp_socket));
 
-    /* free memory */
-    // freeaddrinfo(ai);
     return 0;
 }
