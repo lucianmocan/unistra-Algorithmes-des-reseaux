@@ -46,6 +46,12 @@ void usage(){
 #define QUIT "/QUIT"
 #define CMDSIZE 6
 
+#ifdef BIN
+#define HELLO_BINARY 0
+#define QUIT_BINARY 1
+#endif
+
+
 typedef enum Status {
     UNKNOWN,
     CONNECTED, 
@@ -111,7 +117,6 @@ char* receiveMessage(int udp_socket, struct sockaddr_in6* in6, struct sockaddr_s
     ssize_t n;
     CHECK(n = recvfrom(udp_socket, message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
     message[n] = '\0';
-
     return message;
 }
 
@@ -128,6 +133,15 @@ char* readUserInput(int fd){
 }
 
 Event getSocketMessageEvent(char* message){
+    #ifdef BIN
+    if (message[0] == HELLO_BINARY){
+        return saysHELLO;
+    }
+    if (message[0] == QUIT_BINARY){
+        return saysQUIT;
+    }
+    return saysDATA;
+    #endif
     if (strncmp(message, HELLO, sizeof(HELLO)) == 0){
         return saysHELLO;
     }
@@ -182,7 +196,11 @@ void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr
             case saysHELLO:
             case saysQUIT: {
                 connectionStatus = DISCONNECTED;
+                #ifdef BIN
+                char cmd[1]; cmd[0] = QUIT_BINARY;
+                #else
                 char cmd[CMDSIZE] = QUIT;
+                #endif
                 sendMessage(cmd, fds[1].fd, in6, ss);
                 break;
             }
@@ -225,7 +243,11 @@ int main (int argc, char *argv [])
     if(bind(udp_socket, (struct sockaddr*)in6, sizeof(ss)) == -1){
         // if another client is already waiting send /HELO
         if (errno == EADDRINUSE){
+            #ifdef BIN
+            char cmd[1]; cmd[0] = HELLO_BINARY;
+            #else
             char cmd[CMDSIZE] = HELLO;
+            #endif
             sendMessage(cmd, udp_socket, in6, &ss);
             connectionStatus = CONNECTED;
         }
