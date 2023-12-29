@@ -78,6 +78,10 @@ typedef enum Event {
 
 int connectionStatus = UNKNOWN;
 
+/*
+Check port number and if input is correct then return 
+an integer of the string.
+*/
 long cookPortNumber(char* str_port, int* int_port){
     char* endptr;
     long port = strtol(str_port, &endptr, 10); 
@@ -93,6 +97,9 @@ long cookPortNumber(char* str_port, int* int_port){
     return 0;
 }
 
+/*
+Display remote address and port
+*/
 void displayRemoteInfo(struct sockaddr_storage* ss){
     char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
     if (getnameinfo((struct sockaddr*)ss, sizeof(*ss), hbuf, sizeof(hbuf), 
@@ -147,6 +154,12 @@ char* readUserInput(int fd){
     return buffer;
 }
 
+/*
+    return saysHELLO, if message type is /HELO
+    return saysQUIT, if message type is /QUIT
+    return saysFILE, if message type is /FILE
+    return saysDATA, for all else
+*/
 Event getSocketMessageEvent(char* message){
     #ifdef BIN
     if (message[0] == HELLO_BINARY){
@@ -178,6 +191,13 @@ Event getSocketMessageEvent(char* message){
     return saysDATA;
 }
 
+/*
+    Only valid input is either /QUIT or /FILE for file transfer
+    return saysQUIT for /QUIT
+    return saysFILE for /FILE
+    return saysDATA for all else :
+    /HELO after connection status already CONNECTED; DATA.
+*/
 Event getInputMessageEvent(char* message){
     if (strncmp(message, QUIT, sizeof(QUIT) - 1) == 0){
         if (message[sizeof(QUIT)] == '\0')
@@ -195,8 +215,13 @@ Event getInputMessageEvent(char* message){
 
 #ifdef FILEIO
 
+// the size of the payload / content of the message is 3
 #define PAYLOADSIZECONTAINER 3
 
+/*
+    Get the path of the file indicated by user input:
+    "/FILE <path/to/file>"
+*/
 char* getFilePath(char* message) {
     char buff[BUFSIZ];
     strcpy(buff, message);
@@ -212,6 +237,12 @@ char* getFilePath(char* message) {
     return filepath;
 }
 
+/*
+    Get the file name from the file path, in order
+    to store it in the message to be sent.
+    This will allow for the receiver to store the file
+    under the same name as it was for the sender.
+*/
 char* getFileName(char* filePath){
     char buff[BUFSIZ];
     strcpy(buff, filePath);
@@ -225,6 +256,10 @@ char* getFileName(char* filePath){
     return filename;
 }
 
+/*
+    Count the number of characters that form the header.
+    This allows to have a large file name.
+*/
 int getHeaderSize (char* message){
     int count_spaces = 0;
     int i = 0;
@@ -235,6 +270,11 @@ int getHeaderSize (char* message){
     return i;
 }
 
+/*
+    Check if the path indicated by the user is valid, 
+    if so then return a file descriptor to the file.
+    If not, display a warning to the user.
+*/
 int isValidPath(char* filePath){
     int fd;
     if ((fd = open(filePath, O_RDONLY, 0444)) == -1){
@@ -245,17 +285,36 @@ int isValidPath(char* filePath){
     return fd;
 }
 
-
+/*
+    Store the size of the payload / content into an array 
+    of chars. Since the size is an ssize_t it has to be stored
+    (in this case) on 2 bytes = 2 characters. Add a ' ' (space
+    character) at the end, in order to separate it from 
+    the content.
+*/
 void ssize_t_to_chars(ssize_t value, char result[]) {
     result[0] = (char)((value >> 8) & 0xFF);
     result[1] = (char)(value & 0xFF);
     result[2] = ' ';
 }
 
+/*
+    Get the payload size by doing the reverse instructions
+    to ssize_t_to_chars(). This will allow to ignore the 
+    rest of the buffer when transferring the last part of a file.
+*/
 ssize_t chars_to_ssize_t(const char *chars) {
     return chars[1] + (chars[0] << 8);
 }
 
+/*
+    This function sends a file, be it text or binary.
+    It creates a string with the following structure: messageType' 'fileName' 'payloadSize' 'content
+    It takes in account that the connection might use a binary protocol.
+    And it also allows for a very large fileName.... (maybe it shouldn't).
+    It displays a message to user indicating that the file transfer has completed, 
+    that said, it only means the file has successfully left the client's side.
+*/
 void fileTransferSend(char* message, int socket, struct sockaddr_in6* in6){
     char* filePath = getFilePath(message);
     int fd = isValidPath(filePath);
@@ -291,6 +350,11 @@ void fileTransferSend(char* message, int socket, struct sockaddr_in6* in6){
     }
 }
 
+/*
+    This function receives a file, be it text or binary;
+    It doesn't check if a file with that name already exists in the repository.
+    It displays a message to the user letting them know that the file was received. 
+*/
 void fileTransferReceive(char* message){
     char* filename = getFilePath(message);
     int fd; 
@@ -309,6 +373,17 @@ void fileTransferReceive(char* message){
 }
 #endif
 
+
+/*
+    This function is responsible for processing all events on
+    the UDP socket.
+    It decides based on the type of event.
+    Events:
+    - saysHELLO -> allows to start the "connection".
+    - saysQUIT -> sets the connectionStatus to DISCONNECTED thus ending the main loop of the program.
+    - saysDATA -> prints the message (if it is not a /FILE)
+    - saysFILE -> gets a part of the file using fileTransferReceive()
+*/
 void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
     if(fds[1].revents & POLLIN){
         char* message = receiveMessage(fds[1].fd, in6);
@@ -348,6 +423,18 @@ void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockadd
     }
 }
 
+/*
+    This function is responsible for processing all events (input)
+    on STDIN.
+    It makes decisions based on events.
+    Events: 
+    - saysHELLO : this event is ignored. The only time it is a valid command
+                  is only at the beggining (and it is not sent by the user).
+    - saysQUIT : this sets the connectionStatus to DISCONNECTED thus ending the main loop of the program.
+                 then it sends a command message /QUIT or 1 to the other client.
+    - saysDATA : this sends the message typed by the user on STDIN. (The message is other than /QUIT or /FILE).
+    - saysFILE : when FILEIO is set, it sends an entire file, indicated by the user (if the file exists).
+*/
 void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6){
     if (fds[0].revents & POLLIN){
         char* userInput = readUserInput(fds[0].fd);
@@ -433,7 +520,7 @@ int main (int argc, char *argv [])
     /* main loop */
     while (connectionStatus != DISCONNECTED){
         CHECK(poll(fds, 2, -1));
-        // wait for /HELO but also deal with /QUIT and DATA
+        // wait for /HELO but also deal with /QUIT and DATA, /FILE
         actionOnSocket(fds, in6, &ss);
         // user input from stdin
         actionOnInput(fds, in6);
