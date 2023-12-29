@@ -123,22 +123,16 @@ void sendMessage(char *message, int udp_socket, struct sockaddr_in6* in6){
     }
 }
 
-typedef struct message {
-    ssize_t messageSize;
-    char* message;
-} Message;
 
-Message receiveMessage(int udp_socket, struct sockaddr_in6* in6){
-    Message ms;
-    ms.message = string_create(BUFSIZ + 1); 
+char* receiveMessage(int udp_socket, struct sockaddr_in6* in6){
+    char* message = string_create(BUFSIZ + 1); 
     socklen_t address_len = sizeof(struct sockaddr_storage);
     ssize_t n;
-    CHECK(n = recvfrom(udp_socket, ms.message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
-    ms.messageSize = n;
+    CHECK(n = recvfrom(udp_socket, message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
     #ifndef FILEIO
-    ms.message[n] = '\0';
+    message[n] = '\0';
     #endif
-    return ms;
+    return message;
 }
 
 void destroyMessage(char* message){
@@ -201,6 +195,8 @@ Event getInputMessageEvent(char* message){
 
 #ifdef FILEIO
 
+#define PAYLOADSIZECONTAINER 3
+
 char* getFilePath(char* message) {
     char buff[BUFSIZ];
     strcpy(buff, message);
@@ -232,8 +228,8 @@ char* getFileName(char* filePath){
 int getHeaderSize (char* message){
     int count_spaces = 0;
     int i = 0;
-    while (count_spaces < 2){
-        if (isspace(message[i])) count_spaces++;
+    while (count_spaces < 3){
+        if (message[i] == ' ') count_spaces++;
         i++;
     }
     return i;
@@ -247,6 +243,17 @@ int isValidPath(char* filePath){
         return -1;
     }
     return fd;
+}
+
+
+void ssize_t_to_chars(ssize_t value, char result[]) {
+    result[0] = (char)((value >> 8) & 0xFF);
+    result[1] = (char)(value & 0xFF);
+    result[2] = ' ';
+}
+
+ssize_t chars_to_ssize_t(const char *chars) {
+    return chars[1] + (chars[0] << 8);
 }
 
 void fileTransferSend(char* message, int socket, struct sockaddr_in6* in6){
@@ -267,36 +274,45 @@ void fileTransferSend(char* message, int socket, struct sockaddr_in6* in6){
         int fileNameSize = strlen(fileName);
         strncpy(message + messageTypeSize, fileName, fileNameSize);
 
-        int headerSize = messageTypeSize + fileNameSize;
+        int headerSize = messageTypeSize + fileNameSize + PAYLOADSIZECONTAINER;
         int available_space = BUFSIZ - headerSize;
         ssize_t n;
         while ((n = read(fd, message + headerSize, available_space)) > 0){
+            char payloadSize[PAYLOADSIZECONTAINER];
+            ssize_t_to_chars(n, payloadSize);
+            strncpy(message + messageTypeSize + fileNameSize, payloadSize, PAYLOADSIZECONTAINER);
             sendMessage(message, socket, in6);
-            memset(message + headerSize, 0, BUFSIZ - headerSize); 
 	    }
 	    if (n == -1){
 		    raler(errno, "read");
 	    }
+        printf("File sending completed.\n");
+        CHECK(close(fd));
     }
 }
 
-void fileTransferReceive(Message ms){
-    char* filename = getFilePath(ms.message);
+void fileTransferReceive(char* message){
+    char* filename = getFilePath(message);
     int fd; 
     CHECK(fd = open(filename, O_RDWR | O_CREAT | O_APPEND, 0666));
-    int headerSize = getHeaderSize(ms.message);
+    int headerSize = getHeaderSize(message);
+    ssize_t payloadSize = chars_to_ssize_t(message + headerSize - PAYLOADSIZECONTAINER);
     ssize_t n;
-    CHECK(n = write(fd, ms.message + headerSize, ms.messageSize - headerSize));
-    if (n != ms.messageSize - headerSize){
+    CHECK(n = write(fd, message + headerSize, payloadSize));
+    if (n != payloadSize){
         raler(errno, "write error");
     }
+    if (n < BUFSIZ - headerSize - 1){
+        printf("File receipt completed. File is called : %s\n", filename);
+    }
+    CHECK(close(fd));
 }
 #endif
 
 void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
     if(fds[1].revents & POLLIN){
-        Message ms = receiveMessage(fds[1].fd, in6);
-        Event e = getSocketMessageEvent(ms.message);
+        char* message = receiveMessage(fds[1].fd, in6);
+        Event e = getSocketMessageEvent(message);
         switch(e){
             case saysHELLO: {
                 if (connectionStatus == UNKNOWN){
@@ -313,23 +329,22 @@ void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockadd
             }
             case saysDATA: {
                 if (connectionStatus == CONNECTED){
-                    printf("%s", ms.message);
+                    printf("%s", message);
                 }
                 break;
             }
             #ifdef FILEIO
             case saysFILE: {
                 if (connectionStatus == CONNECTED){
-                    // printf("Receiving file. Wait for completion.\n");
-                    // fflush(stdout);
-                    fileTransferReceive(ms);
-                    // printf("File receipt completed. File is called : %s\n", filename);
+                    printf("Receiving file. Wait for completion.\n");
+                    fflush(stdout);
+                    fileTransferReceive(message);
                 }
                 break;
             }
             #endif
         }
-        destroyMessage(ms.message);
+        destroyMessage(message);
     }
 }
 
