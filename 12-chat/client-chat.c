@@ -9,6 +9,10 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <stdnoreturn.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <ctype.h>
 
 
 #define CHECK(op)   do { if ( (op) == -1) { perror (#op); exit (EXIT_FAILURE); } \
@@ -44,13 +48,18 @@ void usage(){
 #define STRING_SIZE BUFSIZ + 1
 #define HELLO "/HELO"
 #define QUIT "/QUIT"
+#ifdef FILEIO
+#define FILETRANSFER "/FILE "
+#endif
 #define CMDSIZE 6
 
 #ifdef BIN
 #define HELLO_BINARY 0
 #define QUIT_BINARY 1
+#ifdef FILEIO
+#define FILE_BINARY 2
 #endif
-
+#endif
 
 typedef enum Status {
     UNKNOWN,
@@ -62,6 +71,9 @@ typedef enum Event {
     saysHELLO, 
     saysQUIT, 
     saysDATA
+    #ifdef FILEIO
+    ,saysFILE
+    #endif
 } Event;
 
 int connectionStatus = UNKNOWN;
@@ -101,23 +113,32 @@ void string_delete(char* string){
     free(string);
 }
 
-void sendMessage(char *message, int fd, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
+void sendMessage(char *message, int udp_socket, struct sockaddr_in6* in6){
     ssize_t n;
-    socklen_t dest_len = sizeof(*ss);
+    socklen_t dest_len = sizeof(struct sockaddr_storage);
     int message_length = strlen(message);
-    CHECK(n = sendto(fd, message, message_length, 0, (struct sockaddr*)in6, dest_len));
+    CHECK(n = sendto(udp_socket, message, message_length, 0, (struct sockaddr*)in6, dest_len));
     if (n != message_length) {
         exit(EXIT_FAILURE);
     }
 }
 
-char* receiveMessage(int udp_socket, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
-    char *message = string_create(BUFSIZ + 1);
-    socklen_t address_len = sizeof(*ss);
+typedef struct message {
+    ssize_t messageSize;
+    char* message;
+} Message;
+
+Message receiveMessage(int udp_socket, struct sockaddr_in6* in6){
+    Message ms;
+    ms.message = string_create(BUFSIZ + 1); 
+    socklen_t address_len = sizeof(struct sockaddr_storage);
     ssize_t n;
-    CHECK(n = recvfrom(udp_socket, message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
-    message[n] = '\0';
-    return message;
+    CHECK(n = recvfrom(udp_socket, ms.message, BUFSIZ, 0, (struct sockaddr*)in6, &address_len));
+    ms.messageSize = n;
+    #ifndef FILEIO
+    ms.message[n] = '\0';
+    #endif
+    return ms;
 }
 
 void destroyMessage(char* message){
@@ -140,6 +161,11 @@ Event getSocketMessageEvent(char* message){
     if (message[0] == QUIT_BINARY){
         return saysQUIT;
     }
+    #ifdef FILEIO
+    if (message[0] == FILE_BINARY){
+        return saysFILE;
+    }
+    #endif
     return saysDATA;
     #endif
     if (strncmp(message, HELLO, sizeof(HELLO)) == 0){
@@ -148,21 +174,129 @@ Event getSocketMessageEvent(char* message){
     if (strncmp(message, QUIT, sizeof(QUIT)) == 0){
         return saysQUIT;
     }
+    #ifdef FILEIO
+    if (strncmp(message, FILETRANSFER, strlen(FILETRANSFER)) == 0){
+        if (message[strlen(FILETRANSFER) - 1] == ' '){
+            return saysFILE;
+        }
+    }
+    #endif
     return saysDATA;
 }
 
 Event getInputMessageEvent(char* message){
-    if (strncmp(message, QUIT, sizeof(QUIT)-1) == 0){
+    if (strncmp(message, QUIT, sizeof(QUIT) - 1) == 0){
         if (message[sizeof(QUIT)] == '\0')
             return saysQUIT;
     }
+    #ifdef FILEIO
+    if (strncmp(message, FILETRANSFER, strlen(FILETRANSFER)) == 0){
+        if (message[strlen(FILETRANSFER)-  1] == ' '){
+            return saysFILE;
+        }
+    }
+    #endif
     return saysDATA;
 }
 
+#ifdef FILEIO
+
+char* getFilePath(char* message) {
+    char buff[BUFSIZ];
+    strcpy(buff, message);
+
+    // Split the message to get the file path
+    char s[2] = " ";
+    strtok(buff, s);
+    char* filepath = strtok(NULL, s);
+
+    // Remove the trailing newline character, if any
+    filepath[strcspn(filepath, "\n")] = '\0';
+
+    return filepath;
+}
+
+char* getFileName(char* filePath){
+    char buff[BUFSIZ];
+    strcpy(buff, filePath);
+    char s[2] = "/";
+    char* token = strtok(buff, s);
+    char* filename;
+    while (token != NULL){
+        filename = token;
+        token = strtok(NULL, s);
+    }
+    return filename;
+}
+
+int getHeaderSize (char* message){
+    int count_spaces = 0;
+    int i = 0;
+    while (count_spaces < 2){
+        if (isspace(message[i])) count_spaces++;
+        i++;
+    }
+    return i;
+}
+
+int isValidPath(char* filePath){
+    int fd;
+    if ((fd = open(filePath, O_RDONLY, 0444)) == -1){
+        printf("cannot access file %s\n", filePath);
+        fflush(stdout);
+        return -1;
+    }
+    return fd;
+}
+
+void fileTransferSend(char* message, int socket, struct sockaddr_in6* in6){
+    char* filePath = getFilePath(message);
+    int fd = isValidPath(filePath);
+    if (fd != -1){
+        char* fileName = getFileName(filePath);
+        strcat(fileName, " ");
+        char message[BUFSIZ];
+        #ifdef BIN
+        message[0] = FILE_BINARY;
+        message[1] = ' ';
+        int messageTypeSize = 2;
+        #else
+        int messageTypeSize = strlen(FILETRANSFER);
+        strncpy(message, FILETRANSFER, messageTypeSize);
+        #endif
+        int fileNameSize = strlen(fileName);
+        strncpy(message + messageTypeSize, fileName, fileNameSize);
+
+        int headerSize = messageTypeSize + fileNameSize;
+        int available_space = BUFSIZ - headerSize;
+        ssize_t n;
+        while ((n = read(fd, message + headerSize, available_space)) > 0){
+            sendMessage(message, socket, in6);
+            memset(message + headerSize, 0, BUFSIZ - headerSize); 
+	    }
+	    if (n == -1){
+		    raler(errno, "read");
+	    }
+    }
+}
+
+void fileTransferReceive(Message ms){
+    char* filename = getFilePath(ms.message);
+    int fd; 
+    CHECK(fd = open(filename, O_RDWR | O_CREAT | O_APPEND, 0666));
+    int headerSize = getHeaderSize(ms.message);
+    ssize_t n;
+    CHECK(n = write(fd, ms.message + headerSize, ms.messageSize - headerSize));
+    if (n != ms.messageSize - headerSize){
+        raler(errno, "write error");
+    }
+}
+#endif
+
 void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
     if(fds[1].revents & POLLIN){
-        char* message = receiveMessage(fds[1].fd, in6, ss);
-        Event e = getSocketMessageEvent(message);
+        Message ms = receiveMessage(fds[1].fd, in6);
+        Event e = getSocketMessageEvent(ms.message);
         switch(e){
             case saysHELLO: {
                 if (connectionStatus == UNKNOWN){
@@ -179,16 +313,27 @@ void actionOnSocket(struct pollfd* fds, struct sockaddr_in6* in6, struct sockadd
             }
             case saysDATA: {
                 if (connectionStatus == CONNECTED){
-                    printf("%s", message);
+                    printf("%s", ms.message);
                 }
                 break;
             }
+            #ifdef FILEIO
+            case saysFILE: {
+                if (connectionStatus == CONNECTED){
+                    // printf("Receiving file. Wait for completion.\n");
+                    // fflush(stdout);
+                    fileTransferReceive(ms);
+                    // printf("File receipt completed. File is called : %s\n", filename);
+                }
+                break;
+            }
+            #endif
         }
-        destroyMessage(message);
+        destroyMessage(ms.message);
     }
 }
 
-void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr_storage* ss){
+void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6){
     if (fds[0].revents & POLLIN){
         char* userInput = readUserInput(fds[0].fd);
         Event e = getInputMessageEvent(userInput);
@@ -201,13 +346,19 @@ void actionOnInput(struct pollfd* fds, struct sockaddr_in6* in6, struct sockaddr
                 #else
                 char cmd[CMDSIZE] = QUIT;
                 #endif
-                sendMessage(cmd, fds[1].fd, in6, ss);
+                sendMessage(cmd, fds[1].fd, in6);
                 break;
             }
             case saysDATA: {
-                sendMessage(userInput, fds[1].fd, in6, ss);
+                sendMessage(userInput, fds[1].fd, in6);
                 break;
             }
+            #ifdef FILEIO
+            case saysFILE: {
+                fileTransferSend(userInput, fds[1].fd, in6);
+                break;
+            }
+            #endif
         }
         destroyMessage(userInput);
     }
@@ -248,7 +399,7 @@ int main (int argc, char *argv [])
             #else
             char cmd[CMDSIZE] = HELLO;
             #endif
-            sendMessage(cmd, udp_socket, in6, &ss);
+            sendMessage(cmd, udp_socket, in6);
             connectionStatus = CONNECTED;
         }
         else {
@@ -270,7 +421,7 @@ int main (int argc, char *argv [])
         // wait for /HELO but also deal with /QUIT and DATA
         actionOnSocket(fds, in6, &ss);
         // user input from stdin
-        actionOnInput(fds, in6, &ss);
+        actionOnInput(fds, in6);
     }
 
     /* close socket */
