@@ -1,4 +1,12 @@
-# Algorithmes des réseaux
+# Algorithmes des réseaux (Network algorithms)
+
+## This is part of a Network algorithms class I took during my last year of Bachelor in Computer Science at the University of Strasbourg.
+
+All the folders represent labs that I had to complete every week during the semester. 
+At the end, I had to code a chat client that sends and receives messages (including fiile transfer) using UDP sockets. The files for this project and a report (in French) are found in the directory `12-chat`.
+
+
+## Starting here are the contents of the README that was originally written by my teachers and explains how these labs should be completed.
 
 Ce dépôt contient une liste d'exercices pratiques pour apprendre à utiliser l'API socket du langage C. Les exercices sont progressifs et doivent être réalisés dans l'ordre.
 
